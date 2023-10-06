@@ -1,0 +1,219 @@
+Chiariamo differenze tra le varie versioni presenti nella cartella PROGETTO.
+
+(Uccidere i processi sulle porte)
+sudo kill -9 $(lsof -t -i:5681)
+
+FLOTTATEST____2 invece era basato sull'avere 1 process per le batterie e 1 process per i gps.
+
+FLOTTATEST____3 si basa su questa idea :
+
+in questa versione invece che dividere i Process per batterie e Gps, potrei provare a dividerli per
+singola macchina? Considerando che ad ogni macchina corrispondono 1 sensore di batteria e 1 sensore gps,
+soluzione percorribile?
+Differenze?
+1 -- Cartella server
+2 -- Data Manager
+3 -- Testando comportamento Battery 1, aggiunto stop a 0 %, cambiato UPDATE_TIME a 10000.
+
+FLOTTATEST__4 :
+ChargingStation non è un sensore effettivamente... è una classe statica, sempre stesso nome,
+sempre stesse coordinate. ----> cambiato, creato in Sensors/ la classe Chargers, la quale funziona, ma è una
+cosa percorribile? Attualmente non è una risorsa CoAP, può comunque applicare i metodi? Non credo proprio, ma
+sarebbe un problema? O basterebbe semplicemente cambiare architettura aggiungendo i dati delle posizioni delle
+colonnine dentro a Data Manager ad esempio ed usando Chargers anche solo per chiamare i vari campi ecc.?
+
+Chargers è ok per ora... proviamo a lavorare su quello che sarebbe un server ... test ...
+Cartella server/testCoapProcess
+Cartella resource/batteries/TESTCoapResourceBattery1
+Cartella sensors/batteries/TESTBattery1
+Cartella sensors/Fleet/TESTGPSCar1
+
+Modificato server/Car1 (2,3 e 4 anche...) mettendo switch dentro, secondo progettazione su carta. Mi sembra la scelta
+migliore onestamente...
+3 risorse per ogni server :
+- Gps (settare richiesta GET-OBS) in modo da ricevere aggiornamenti continui (mod asincrona)
+
+- Battery level (settare richiesta GET-OBS) in modo da ricevere aggiornamenti continui (mod asincrona) come per gps
+
+- Switch (settare richiesta POST o PUT per aggiornare status dello switch) effettivamente non ho bisogno di richieste per
+         essere a conoscenza del valore attuale, dato che se tutto funzionasse a dovere lo potrei intuire direttamente
+         dal livello della batteria (ON se BatteryLev < 20% e OFF se BatterLev > 20%).
+         Converrebbe usare una POST? Forse si, andando a mettere nel body della risposta la posizione della
+         colonnina più vicina alle coordinate attuali.
+
+
+FLOTTATEST__5 ... Primi grandi passi, prima versione del Data Manager, funziona apparentemente, ma ha qualche
+cosetta da fixare... ad esempio, perchè le batterie hanno sempre valori simili ? Molto molto simili anzi...
+Gps ... a volte "printa" male il valore aggiornato (passato tramite il payload)
+UPDATE :
+    -GPS PRINTA I VALORI GIUSTI DEI WAYPOINT... SARANNO SIMILI PERCHE' ALCUNI PERCORSI HANNO DELLE STRADE
+    INIZIALI COMUNI
+    -BATTERIE OK NELL'OBSERVATION, I VALORI HANNO SENSO E SONO SIMILI SOLO PERCHE' INIZIANO TUTTI NELLO STESSO
+    RANGE DI VALORI (90-100). ESEGUITO TEST MODIFICANDO I RANGE INIZIALI E HO OTTENUTO RISULTATI POSITIVI
+    COME DA PREVISIONE.
+
+FLOTTATEST__4 --> FLOTTATEST__5 in pratica accantonate le vecchie classi che vengono sostituite con le nuove...
+molti nomi da fixare... quindi occhio a dimenticanze (molto probabili qua e la).
+Fare attenzione a non far errori, FLOTTATEST__4 non è da eliminare essendo l'ultimo backup.
+
+Problemi durante l'esecuzione dei diversi server dovuti alle porte, provo a settare manualmente porte 5682 e 5681
+
+UPDATE :
+    -FUNZIONANO I DIVERSI SERVER CON PORTE RISPETTIVAMENTE 5681/5682/5683/5684, PROF HA SENSO O NO?
+
+COSA MANCA AL PROGETTO PER ESSERE CONSIDERATO TERMINATO ?
+
+    -   LA FUNZIONE DI SWITCH CHE NOTIFICHI LA POSIZIONE DELLA COLONNINA PIU' VICINA
+
+28/5
+    FUNZIONAMENTO TEORICO SECONDO ME ...
+
+    CLIENT FA GET AL SERVER SU GPS E BATTERY, (CON OBSERVABILITY)
+    IN QUALCHE MODO DEVE ESSERCI UN CONTROLLO SUL LIVELLO DELLA BATTERY, QUINDI IL CLIENT (NEL DATA MANAGER),
+    APPENA RICEVE UNA RISPOSTA CON PAYLOAD CONTENTE UN VALORE SOTTO AL 20% DEVE
+    FARE UNA RICHIESTA POST O PUT (DA DECIDERE) IN CUI PASSA (COME PAYLOAD?) LA PROPRIA POSIZIONE ATTUALE.
+    COME RISPOSTA, IL SERVER DEVE RISPONDERE SETTANDO LO SWITCH SU ON E INVIANDO COME PAYLOAD LA POSIZIONE DELLA
+    COLONNINA PIU' VICINA.
+
+    ALTERNATIVA... SE INVECE CHE ESEGUIRE TUTTO IN UN PASSAGGIO, VI FOSSE UN PASSAGGIO INTERMEDIO?
+    OVVERO...
+    IL DATA MANAGER UNA VOLTA SOTTO UN CERTO LIVELLO ESEGUE UNA POST IN MODO DA ATTIVARE LO SWITCH
+    CHE AUTOMATICAMENTE SETTERA' LA VELOCITA' MASSIMA, PER POI FARE IN MODO DI ESEGUIRE UNA NUOVA
+    RICHIESTA DI TIPO GET CHE INVII LA POSIZIONE CORRENTE PER RICEVERE LA POSIZIONE DELLA
+    COLONNINA PIU' VICINA A SE.
+
+31/05
+
+    Eseguito nuovo test creando /DataManager_TEST, praticamente faccio direttamente il check sul payload ricevuto
+    che effettivamente è il valore del sensore aggiornato.
+    primo problema --> Sulla stessa observe vengono passati dati sia di gps che di battery
+    ---> soluzione momentanea(?) ---> fatto check sull'URL, qualora l'URL contenga Battery farà una certa azione
+    facendo così da filtro. ---> soluzione ok? Oppure sarebbe meglio fare due diverse funzioni di observe?
+
+
+    Da sistemare le risposte delle get in modo che "ritorni" un formato senML
+
+15/06
+    Aggiunto il controllo sul valore dello switch, ora la richiesta POST viene eseguita solamente se il valore
+    dello switch è su OFF (false), in modo da evitare di creare 1 thread per ogni esecuzione creando POST che in
+    realtà non devono modificare nulla.
+
+    Ora rimane da sentire il prof, chiedendo come agire sulla ricarica, mettere un percorso FIXED in modo da far
+    sempre arrivare il veicolo alla ricarica, oppure lasciare così e limitarsi alla segnalazione della colonnina
+    più vicina?
+
+20/06
+    Il prof ha risposto, preferisce scelta 2 ----> Implementare la fermata sul tragitto + la ricarica.
+    Controllare se con il metodo utilizzato precedentemente si possono importare tratte con waypoint di sosta
+    come date su google maps quando imposti la navigazione
+
+22/06
+    Cambiate le coordinate riguardanti le colonnine e cambiati i percorsi, ora il percorso di una macchina
+    passa sempre per la colonnina.
+
+    What's next?
+
+    Fare in modo che l'aggiornamento di una batteria sia in linea con
+    l'avanzamento della macchina in modo che una macchina vada alla colonnina quando è effettivamente scarica.
+
+    Modificato andamento batteria in Battery2_TEST . Ora in grado di ricaricare.
+    Prossimo passo ---> Adattare caricamento al rate a cui viaggia il veicolo.
+
+04/07
+    Aggiustate tutte le batterie, la richiesta attuale del prof prevede che lo scaricarsi della batteria sia
+    al passo con il movimento dei veicoli
+
+    Soluzione (?) :
+        Basta adattare il rate di aggiornamento in ogni Batteries/Battery*.
+
+    Più difficile sarà aggiustare il rate di ricarica, come faccio a "fermare" il veicolo?
+
+    RIGA 2312 -- Charger 1 -- :  <trkpt lat="45.1662194" lon="10.8533472"> MN NORD - n TP761 -
+    RIGA 961 -- Charger 2 -- :   <trkpt lat="45.06075" lon="11.05413"> SUSTI - n TP311 -
+    RIGA 1561 -- Charger 3 -- :    <trkpt lat="45.15396" lon="11.18457"> CEREA - n TP511 -
+    RIGA 2044 -- Charger 4 -- : <trkpt lat="44.97169" lon="11.12772"> MIRANDOLA - n TP672 -
+
+
+    SOLUZIONE :
+        Thread.sleep permette di stoppare un qualsiasi thread per un certo n di ms. Così facendo potrei stoppare
+        il Timer del gps per il tempo richiesto per terminare la ricarica.
+                    --> modifica effettuata
+
+    SECONDA COSA DA VERIFICARE :
+        Fermare il thread una volta arrivato a destinazione.
+                    Fatto ---> updateTimer.cancel
+
+
+    TO_DO:
+      -  Adattare il rate di aggiornamento della batteria rispetto al GPS
+
+      -  Stoppare la batteria una volta arrivato a destinazione.
+
+        Batteria2_test contiene una possibile soluzione momentanea con un flag.
+            Il problema è che così sono difficili da sincronizzare.
+
+        Provato a rimuovere un pezzo di codice dall'update della batteria, in caso di problemi ho lasciato il pezzo commentato in Battery1
+
+05/07
+    Fatto leggera pulizia riguardante variabili e import non utilizzati.
+
+    Iniziato fase di implementazione dei vari JSON + SenML
+    Il problema è che per ora il loro "print" restituisce la stampa dell'oggetto "SmartObject" e non
+    i singoli valori di batteria o gps.
+
+06/07
+    Creato la classe server/Server per velocizzare la fase di test.
+    Semplicemente il signolo run di Server fa partire tutte e 5 le classi
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+    DOPO 1 MESE SONO RIUSCITO A RIMUOVERE I LOG DI DEBUG (PARREBBE) -->
+                AGGIUNTO src/main/resources/logback.xml E DEPENDENCIES NEL pom.xml
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+08 - 09 - 10/07
+
+    Persiste il problema legato alla stampa in formato JSON+SenML.
+    1 - Provato ad aggiornare versione di Java
+    2 - Provato ad aggiornare versione di Maven
+    3 - Installato plugin per Maven
+
+    Evitato disastro dopo l'aggiornamento di Maven
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    ULTIME MODIFICHE QUINDI :
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    STAMPARE NEL CORRETTO FORMATO SENML+JSON
+    ARRESTARE L'OBSERVE QUANDO LA VETTURA GIUNGE A DEST.
+    VOLENDO SI PUO' PURE AGGIUNGERE CHE LO SWITCH AGGIUNGA COORDINATE COLONNINA COME PAYLOAD.
+    IMPOSTARE LO STATO DELLO SWITCH A FALSE UNA VOLTA FINITA LA RICARICA
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+DOMANDE PROF 12/07
+
+- ERRORE RELATIVO AL SENML + JSON (tra l'altro ora vi è un errore nuovo mai presentatosi prima)
+- Cancellare su condizione la observation relation.
+
+    OBSERVATION RELATION PARREBBE IN REALTA' FUNZIONARE ORA, IL PROBLEMA PERO' RIMANE NELLA FORMA :
+        COME STOPPARE L'OBSERVATION PURE SULLE BATTERIE UNA VOLTA A DESTINAZIONE?
+
+
+13/07
+    UTILIZZATO demo smarthome di ESSE3 per apportare modifiche ---> le modifiche parrebbero aver fixato
+    il problema sopra indicato.
+
+    TASK FINALE :
+        - CANCELLARE OBSERVATION UNA VOLTA CHE I VEICOLI ARRIVANO A DESTINAZIONE.
+
+    FATTO
+
+    SISTEMATI I JSON+SENML
+
+    ULTIMO PASSO POTREBBE ESSERE AGGIUNGERE IL PASSAGGIO DELLE COORDINATE DELLE COLONNINE TRAMITE COAP
+    E NON TRAMITE UN MESSAGGIO DI LOGGER.INFO.
+
+FINE.

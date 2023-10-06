@@ -1,0 +1,23 @@
+@Override
+    public void handlePUT(CoapExchange exchange) {
+        try{
+            logger.info("Request pretty print : {}", Utils.prettyPrint(exchange.advanced().getRequest()));
+            logger.info("Received PUT request with body {}",exchange.getRequestText());
+
+            if (this.switchRawActuator.isValue() == false) {
+                this.switchRawActuator.switchStatusOn();
+            }
+
+            //test sul payload della richiesta PUT
+
+
+            logger.info("Switch status modified : {}", this.switchRawActuator.isValue());
+            exchange.respond(CoAP.ResponseCode.CHANGED,"POSIZIONE CORRENTE");
+            changed();
+
+        }catch (Exception e){
+            logger.error("Error Handling PUT -> {}", e.getLocalizedMessage());
+            exchange.respond(CoAP.ResponseCode.INTERNAL_SERVER_ERROR);
+        }
+
+    }
